@@ -1,16 +1,45 @@
 yobu "kiso/os";
+yobu "kiso/convert";
 
-koukai waza option(name:string) -> string?{
-	kaku argv = os.arguments();
-	kaku i: int64 = 1;
-	aida (i < len(argv)){
-		moshi (argv[i] == name){
-			moshi (i +1 < len(argv)) {
-				kaesu argv[i+1];
+
+koukai waza option_from(arguments: []string,name:string) -> string?{
+	kaku index: int64 = 1;
+	aida (index < len(arguments)) {
+		moshi (arguments[index] == name){
+			moshi (index + 1 < len(arguments)){
+				kaesu arguments[index + 1];
 			}
 			kaesu mu;
 		}
-		i = i + 1;
+		index = index + 1;
 	}
 	kaesu mu;
 }
+
+koukai waza option(name:string) -> string?{
+	kaesu option_from(os.arguments(), name);
+}
+
+koukai waza option_int_from(arguments: []string, name: string) -> int64? {
+    kaku text_value = option_from(arguments, name);
+    moshi (text_value == mu) { kaesu mu; }
+    kaesu convert.parse_int(text_value);
+}
+
+koukai waza option_int(name: string) -> int64? {
+    kaesu option_int_from(os.arguments(), name);
+}
+
+koukai waza has_flag_from(arguments: []string, name: string) -> bool {
+    kaku index: int64 = 1;
+    aida (index < len(arguments)) {
+        moshi (arguments[index] == name) { kaesu hai; }
+        index = index + 1;
+    }
+    kaesu iie;
+}
+
+koukai waza has_flag(name: string) -> bool {
+    kaesu has_flag_from(os.arguments(), name);
+}
+

@@ -1,0 +1,24 @@
+
+yobu "kiso/testing";
+yobu "kiso/array";
+
+waza terminal_text_is(value: string?, expected: string) -> bool {
+    moshi (value == mu) { kaesu iie; }
+    kaesu value == expected;
+}
+
+waza test_decode_line_bytes() -> unit {
+    testing.expect(terminal_text_is(decode_line_bytes([]), ""), "empty line distinct from EOF");
+    testing.expect(terminal_text_is(decode_line_bytes([72, 105]), "Hi"), "ASCII line");
+    testing.expect(terminal_text_is(decode_line_bytes([230, 151, 165, 230, 156, 172]), "日本"), "UTF-8 Japanese");
+    testing.expect(terminal_text_is(decode_line_bytes([65, 13]), "A"), "CRLF trailing CR handling");
+    testing.expect(terminal_text_is(decode_line_bytes([13]), ""), "CR-only line becomes empty");
+    testing.expect(decode_line_bytes([255]) == mu, "invalid UTF-8 rejected");
+}
+
+waza test_decode_line_length_limit() -> unit {
+    kaku exactly = array.make[uint8](4096, uint8(65));
+    kaku excessive = array.make[uint8](4097, uint8(65));
+    testing.expect(decode_line_bytes(exactly) != mu, "4096 bytes accepted");
+    testing.expect(decode_line_bytes(excessive) == mu, "4097 bytes rejected");
+}

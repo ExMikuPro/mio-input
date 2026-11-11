@@ -1,44 +1,108 @@
+
 yobu "kiso/fs";
 yobu "kiso/array";
 yobu "kiso/string";
 
-koukai waza line() -> string?{
-	kaku opened = fs.open_read("/dev/stdin");
-	kaku file = opened.file;
+// Pure helper: remove one trailing CR; validate UTF-8.
+// The 4096-byte limit counts raw bytes, not Unicode code points.
+waza decode_line_bytes(data: []uint8) -> string? {
+    moshi (len(data) > 4096) { kaesu mu; }
+    kaku copy = array.clone(data);
+    moshi (len(copy) > 0 && copy[len(copy) - 1] == uint8(13)) {
+        array.truncate(copy, len(copy) - 1);
+    }
+    kaesu string.from_utf8(copy);
+}
 
-	moshi (file == mu){
-		kaesu mu;
-	}
+// v0.1.0-compatible API: one UTF-8 line from stdin.
+// Empty line -> ""; EOF before any bytes, invalid UTF-8, or I/O error -> mu.
+// A too-long line is drained through the following newline, then returns mu.
+koukai waza line() -> string? {
+    kaku opened = fs.open_read("/dev/stdin");
+    kaku file = opened.file;
+    moshi (file == mu) { kaesu mu; }
 
-	kaku data: []uint8 = [];
-	kaku cell: []uint8 = [uint8(0)];
+    kaku data: []uint8 = [];
+    kaku byte_cell: []uint8 = [uint8(0)];
+    kaku too_long = iie;
 
-	aida (hai) {
-		kaku result =fs.read(file,cell,0,1);
+    aida (hai) {
+        kaku result = fs.read(file, byte_cell, 0, 1);
+        moshi (result.error != mu) {
+            fs.close(file);
+            kaesu mu;
+        }
 
-		moshi (result.error != mu){
-			fs.close(file);
-			kaesu mu;
-		}
+        // No bytes: EOF with accumulated data, or no progress.
+        moshi (result.count == 0) {
+            fs.close(file);
+            moshi (result.eof && len(data) > 0 && !too_long) {
+                kaesu decode_line_bytes(data);
+            }
+            kaesu mu;
+        }
 
-		moshi (result.count == 0){
-			fs.close(file);
+        moshi (byte_cell[0] == uint8(10)) {
+            fs.close(file);
+            moshi (too_long) { kaesu mu; }
+            kaesu decode_line_bytes(data);
+        }
 
-			moshi (len(data) == 0){
-				kaesu mu;
-			}
-			kaesu string.from_utf8(data);
-		}
-		kaku ch = cell[0];
+        moshi (!too_long) {
+            moshi (len(data) >= 4096) {
+                too_long = hai;
+            } sore {
+                array.push(data, byte_cell[0]);
+            }
+        }
+    }
 
-		moshi (ch == uint8(10)){
-			fs.close(file);
-			kaesu string.from_utf8(data);
-		}
+    kaesu mu;
+}
 
-		moshi (ch != uint8(13)){
-			array.push(data,ch);
-		}
-	}
-	kaesu mu;
+// Use chant for prompt output; it adds a newline but avoids terminal-mode APIs.
+koukai waza ask(prompt: string) -> string? {
+    chant(prompt);
+    kaesu line();
+}
+
+// At most three attempts. Invalid/EOF/exhausted retries all yield mu.
+koukai waza ask_int(prompt: string) -> int64? {
+    kaku attempts: int64 = 0;
+    aida (attempts < 3) {
+        kaku value = ask(prompt);
+        moshi (value == mu) { kaesu mu; }
+        kaku parsed = parse_int_text(value);
+        moshi (parsed != mu) { kaesu parsed; }
+        attempts = attempts + 1;
+        moshi (attempts < 3) { chant("请输入有效的十进制整数。"); }
+    }
+    kaesu mu;
+}
+
+koukai waza ask_float(prompt: string) -> float64? {
+    kaku attempts: int64 = 0;
+    aida (attempts < 3) {
+        kaku value = ask(prompt);
+        moshi (value == mu) { kaesu mu; }
+        kaku parsed = parse_float_text(value);
+        moshi (parsed != mu) { kaesu parsed; }
+        attempts = attempts + 1;
+        moshi (attempts < 3) { chant("请输入有效的有限浮点数。"); }
+    }
+    kaesu mu;
+}
+
+// [y/N] default: empty line means No. EOF remains mu.
+koukai waza confirm(prompt: string) -> bool? {
+    kaku attempts: int64 = 0;
+    aida (attempts < 3) {
+        kaku value = ask(string.concat(prompt, " [y/N]"));
+        moshi (value == mu) { kaesu mu; }
+        kaku parsed = parse_confirm(value);
+        moshi (parsed != mu) { kaesu parsed; }
+        attempts = attempts + 1;
+        moshi (attempts < 3) { chant("请输入 y/yes 或 n/no。"); }
+    }
+    kaesu mu;
 }

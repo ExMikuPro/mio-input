@@ -1,0 +1,27 @@
+yobu "kiso/convert";
+yobu "kiso/math";
+
+koukai waza parse_int_text(value: string) -> int64? {
+    kaesu convert.parse_int(value);
+}
+
+koukai waza parse_float_text(value: string) -> float64? {
+    kaku parsed = convert.parse_float64(value);
+    moshi (parsed == mu) { kaesu mu; }
+    moshi (!math.is_finite(parsed)) { kaesu mu; }
+    kaesu parsed;
+}
+
+koukai waza parse_confirm(value: string) -> bool? {
+    moshi (value == "" || value == "n" || value == "N" ||
+           value == "no" || value == "No" || value == "NO" ||
+           value == "iie") {
+        kaesu iie;
+    }
+    moshi (value == "y" || value == "Y" ||
+           value == "yes" || value == "Yes" || value == "YES" ||
+           value == "hai") {
+        kaesu hai;
+    }
+    kaesu mu;
+}

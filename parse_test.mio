@@ -1,0 +1,52 @@
+
+yobu "kiso/testing";
+
+waza parse_int_is(value: int64?, expected: int64) -> bool {
+    moshi (value == mu) { kaesu iie; }
+    kaesu value == expected;
+}
+
+waza parse_float_is(value: float64?, expected: float64) -> bool {
+    moshi (value == mu) { kaesu iie; }
+    kaesu value == expected;
+}
+
+waza parse_bool_is(value: bool?, expected: bool) -> bool {
+    moshi (value == mu) { kaesu iie; }
+    kaesu value == expected;
+}
+
+waza test_parse_int_text() -> unit {
+    testing.expect(parse_int_is(parse_int_text("0"), 0), "zero");
+    testing.expect(parse_int_is(parse_int_text("-42"), -42), "negative integer");
+    testing.expect(parse_int_is(parse_int_text("+7"), 7), "explicit plus");
+    testing.expect(parse_int_is(parse_int_text("9223372036854775807"), 9223372036854775807), "int64 max");
+    testing.expect(parse_int_text("") == mu, "empty input invalid");
+    testing.expect(parse_int_text("12x") == mu, "malformed integer");
+    testing.expect(parse_int_text(" 42") == mu, "leading space rejected");
+    testing.expect(parse_int_text("9223372036854775808") == mu, "overflow rejected");
+}
+
+waza test_parse_float_text() -> unit {
+    testing.expect(parse_float_is(parse_float_text("1.5"), 1.5), "simple float");
+    testing.expect(parse_float_is(parse_float_text("-2.25"), -2.25), "negative float");
+    testing.expect(parse_float_is(parse_float_text("1e2"), 100.0), "exponent notation");
+    testing.expect(parse_float_text("") == mu, "empty float invalid");
+    testing.expect(parse_float_text("not-number") == mu, "malformed float");
+    testing.expect(parse_float_text("NaN") == mu, "NaN rejected");
+    testing.expect(parse_float_text("Infinity") == mu, "infinity rejected");
+    testing.expect(parse_float_text("1e400") == mu, "overflow rejected");
+}
+
+waza test_parse_confirm() -> unit {
+    testing.expect(parse_bool_is(parse_confirm("y"), hai), "y is yes");
+    testing.expect(parse_bool_is(parse_confirm("Yes"), hai), "Yes is yes");
+    testing.expect(parse_bool_is(parse_confirm("YES"), hai), "YES is yes");
+    testing.expect(parse_bool_is(parse_confirm("hai"), hai), "Mio yes");
+    testing.expect(parse_bool_is(parse_confirm("n"), iie), "n is no");
+    testing.expect(parse_bool_is(parse_confirm("NO"), iie), "NO is no");
+    testing.expect(parse_bool_is(parse_confirm("iie"), iie), "Mio no");
+    testing.expect(parse_bool_is(parse_confirm(""), iie), "blank uses default No");
+    testing.expect(parse_confirm("maybe") == mu, "unknown answer must retry");
+    testing.expect(parse_confirm(" y ") == mu, "whitespace is not normalized");
+}

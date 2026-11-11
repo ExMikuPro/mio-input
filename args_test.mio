@@ -1,0 +1,38 @@
+
+yobu "kiso/testing";
+
+waza args_text_is(value: string?, expected: string) -> bool {
+    moshi (value == mu) { kaesu iie; }
+    kaesu value == expected;
+}
+
+waza args_int_is(value: int64?, expected: int64) -> bool {
+    moshi (value == mu) { kaesu iie; }
+    kaesu value == expected;
+}
+
+waza test_option_from() -> unit {
+    kaku args: []string = ["demo", "--name", "Miku", "--age", "16"];
+    testing.expect(args_text_is(option_from(args, "--name"), "Miku"), "string option");
+    testing.expect(args_text_is(option_from(args, "--age"), "16"), "second option");
+    testing.expect(option_from(args, "--missing") == mu, "missing option");
+    testing.expect(option_from(["demo", "--name"], "--name") == mu, "missing value");
+    testing.expect(option_from(["demo"], "--name") == mu, "argv with only program name");
+    testing.expect(args_text_is(option_from(["demo", "--name", ""], "--name"), ""), "empty value is valid");
+}
+
+waza test_option_int_from() -> unit {
+    testing.expect(args_int_is(option_int_from(["demo", "--age", "16"], "--age"), 16), "integer argument");
+    testing.expect(args_int_is(option_int_from(["demo", "--age", "-42"], "--age"), -42), "negative integer");
+    testing.expect(option_int_from(["demo", "--age", "bad"], "--age") == mu, "malformed integer");
+    testing.expect(option_int_from(["demo", "--age", "9223372036854775808"], "--age") == mu, "overflow");
+    testing.expect(option_int_from(["demo"], "--age") == mu, "missing integer option");
+}
+
+waza test_has_flag_from() -> unit {
+    kaku args: []string = ["demo", "--verbose", "--name", "Miku"];
+    testing.expect(has_flag_from(args, "--verbose"), "existing flag");
+    testing.expect(!has_flag_from(args, "--debug"), "missing flag");
+    testing.expect(!has_flag_from(["--verbose"], "--verbose"), "argv0 is not a flag");
+    testing.expect(!has_flag_from(["demo", "--verbose-extra"], "--verbose"), "exact token matching");
+}
