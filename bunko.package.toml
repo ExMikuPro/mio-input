@@ -1,0 +1,8 @@
+[package]
+name = "exmikupro/input"
+description = "Mio CIL INPUT Bunko"
+version = "0.1.0"
+license = "MIT"
+
+[platforms]
+macos = ["arm64"]

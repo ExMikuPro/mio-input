@@ -1,0 +1,16 @@
+yobu "kiso/os";
+
+koukai waza option(name:string) -> string?{
+	kaku argv = os.arguments();
+	kaku i: int64 = 1;
+	aida (i < len(argv)){
+		moshi (argv[i] == name){
+			moshi (i +1 < len(argv)) {
+				kaesu argv[i+1];
+			}
+			kaesu mu;
+		}
+		i = i + 1;
+	}
+	kaesu mu;
+}

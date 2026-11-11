@@ -1,0 +1,5 @@
+/build/
+/dist/
+*.mochi
+*.miob
+.DS_Store

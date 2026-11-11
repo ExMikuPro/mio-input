@@ -1,0 +1,44 @@
+yobu "kiso/fs";
+yobu "kiso/array";
+yobu "kiso/string";
+
+koukai waza line() -> string?{
+	kaku opened = fs.open_read("/dev/stdin");
+	kaku file = opened.file;
+
+	moshi (file == mu){
+		kaesu mu;
+	}
+
+	kaku data: []uint8 = [];
+	kaku cell: []uint8 = [uint8(0)];
+
+	aida (hai) {
+		kaku result =fs.read(file,cell,0,1);
+
+		moshi (result.error != mu){
+			fs.close(file);
+			kaesu mu;
+		}
+
+		moshi (result.count == 0){
+			fs.close(file);
+
+			moshi (len(data) == 0){
+				kaesu mu;
+			}
+			kaesu string.from_utf8(data);
+		}
+		kaku ch = cell[0];
+
+		moshi (ch == uint8(10)){
+			fs.close(file);
+			kaesu string.from_utf8(data);
+		}
+
+		moshi (ch != uint8(13)){
+			array.push(data,ch);
+		}
+	}
+	kaesu mu;
+}
