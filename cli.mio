@@ -1,0 +1,402 @@
+
+yobu "kiso/array";
+yobu "kiso/os";
+yobu "kiso/string";
+
+// CLI option definition.
+koukai kata CliSpec {
+    long_name: string;
+    short_name: string;
+    takes_value: bool;
+    required: bool;
+    default_value: string?;
+    description: string;
+}
+
+// Parsed command-line arguments.
+koukai kata CliResult {
+    values: []string;
+    seen: []bool;
+    positionals: []string;
+    help_requested: bool;
+    error: string?;
+}
+
+// Create an option that accepts a value.
+koukai waza value_option(
+    long_name: string,
+    short_name: string,
+    required: bool,
+    default_value: string?,
+    description: string
+) -> CliSpec {
+    kaesu CliSpec {
+        long_name: long_name,
+        short_name: short_name,
+        takes_value: hai,
+        required: required,
+        default_value: default_value,
+        description: description
+    };
+}
+
+// Create a boolean flag.
+koukai waza flag_option(
+    long_name: string,
+    short_name: string,
+    description: string
+) -> CliSpec {
+    kaesu CliSpec {
+        long_name: long_name,
+        short_name: short_name,
+        takes_value: iie,
+        required: iie,
+        default_value: mu,
+        description: description
+    };
+}
+
+// Find a long or short option name.
+waza find_spec(specs: []CliSpec, name: string) -> int64 {
+    kaku i: int64 = 0;
+
+    aida (i < len(specs)) {
+        moshi (
+            specs[i].long_name == name ||
+            (
+                specs[i].short_name != "" &&
+                specs[i].short_name == name
+            )
+        ) {
+            kaesu i;
+        }
+
+        i = i + 1;
+    }
+
+    kaesu -1;
+}
+
+// Extract a UTF-8 byte range.
+// Used for --name=value.
+waza byte_part(
+    value: string,
+    start: int64,
+    end: int64
+) -> string {
+    kaku source = string.to_bytes(value);
+    kaku data: []uint8 = [];
+    kaku i = start;
+
+    aida (i < end) {
+        array.push(data, source[i]);
+        i = i + 1;
+    }
+
+    kaku text = string.from_utf8(data);
+
+    moshi (text == mu) {
+        kaesu "";
+    }
+
+    kaesu text;
+}
+
+
+waza make_cli_result(
+    values: []string,
+    seen: []bool,
+    positionals: []string,
+    help_requested: bool,
+    error_text: string?
+) -> CliResult {
+    kaesu CliResult {
+        values: values,
+        seen: seen,
+        positionals: positionals,
+        help_requested: help_requested,
+        error: error_text
+    };
+}
+
+koukai waza parse_args(
+    arguments: []string,
+    specs: []CliSpec
+) -> CliResult {
+    kaku values = array.make[string](len(specs), "");
+    kaku seen = array.make[bool](len(specs), iie);
+    kaku positionals: []string = [];
+
+    // Initialize defaults.
+    kaku i: int64 = 0;
+
+    aida (i < len(specs)) {
+        kaku fallback = specs[i].default_value;
+
+        moshi (fallback != mu) {
+            values[i] = fallback;
+        }
+
+        i = i + 1;
+    }
+
+    kaku index: int64 = 1;
+    kaku positional_only = iie;
+
+    aida (index < len(arguments)) {
+        kaku token = arguments[index];
+
+        moshi (positional_only) {
+            array.push(positionals, token);
+            index = index + 1;
+        } sore {
+            moshi (token == "--") {
+                positional_only = hai;
+                index = index + 1;
+            } sore {
+                // Handle --help and -h.
+                moshi (
+                    token == "--help" ||
+                    token == "-h"
+                ) {
+                    kaesu make_cli_result(
+                        values, seen, positionals, hai, mu
+                    );
+                }
+
+                // Positional argument.
+                moshi (
+                    token == "-" ||
+                    !string.has_prefix(token, "-")
+                ) {
+                    array.push(positionals, token);
+                    index = index + 1;
+                } sore {
+                    kaku equal = string.index(token, "=");
+                    kaku name = token;
+
+                    moshi (equal >= 0) {
+                        name = byte_part(token, 0, equal);
+                    }
+
+                    kaku spec_index = find_spec(specs, name);
+
+                    // Unknown option.
+                    moshi (spec_index < 0) {
+                        kaesu make_cli_result(
+                            values,
+                            seen,
+                            positionals,
+                            iie,
+                            string.concat("Unknown option: ", name)
+                        );
+                    }
+
+                    // Boolean flag.
+                    moshi (!specs[spec_index].takes_value) {
+                        moshi (equal >= 0) {
+                            kaesu make_cli_result(
+                                values,
+                                seen,
+                                positionals,
+                                iie,
+                                string.concat(
+                                    "Flag does not accept a value: ",
+                                    name
+                                )
+                            );
+                        }
+
+                        seen[spec_index] = hai;
+                    } sore {
+                        // --name=Miku
+                        moshi (equal >= 0) {
+                            values[spec_index] = byte_part(
+                                token,
+                                equal + 1,
+                                string.byte_len(token)
+                            );
+                        } sore {
+                            // --name Miku
+                            moshi (index + 1 >= len(arguments)) {
+                                kaesu make_cli_result(
+                                    values,
+                                    seen,
+                                    positionals,
+                                    iie,
+                                    string.concat(
+                                        "Missing value for: ", name
+                                    )
+                                );
+                            }
+
+                            kaku next = arguments[index + 1];
+
+                            moshi (
+                                next == "--" ||
+                                string.has_prefix(next, "--") ||
+                                find_spec(specs, next) >= 0
+                            ) {
+                                kaesu make_cli_result(
+                                    values,
+                                    seen,
+                                    positionals,
+                                    iie,
+                                    string.concat(
+                                        "Missing value for: ", name
+                                    )
+                                );
+                            }
+
+                            values[spec_index] = next;
+                            index = index + 1;
+                        }
+
+                        seen[spec_index] = hai;
+                    }
+
+                    index = index + 1;
+                }
+            }
+        }
+    }
+
+    // Check required options.
+    i = 0;
+
+    aida (i < len(specs)) {
+        moshi (specs[i].required && !seen[i]) {
+            kaesu make_cli_result(
+                values,
+                seen,
+                positionals,
+                iie,
+                string.concat(
+                    "Missing required option: ",
+                    specs[i].long_name
+                )
+            );
+        }
+
+        i = i + 1;
+    }
+
+    kaesu make_cli_result(
+        values,
+        seen,
+        positionals,
+        iie,
+        mu
+    );
+}
+
+
+// Parse the current process arguments.
+koukai waza parse_command_line(
+    specs: []CliSpec
+) -> CliResult {
+    kaesu parse_args(os.arguments(), specs);
+}
+
+// Get an option value, including its default.
+koukai waza get_value(
+    result: CliResult,
+    specs: []CliSpec,
+    name: string
+) -> string? {
+    kaku i = find_spec(specs, name);
+
+    moshi (i < 0 || !specs[i].takes_value) {
+        kaesu mu;
+    }
+
+    moshi (
+        result.seen[i] ||
+        specs[i].default_value != mu
+    ) {
+        kaesu result.values[i];
+    }
+
+    kaesu mu;
+}
+
+// Check a boolean flag.
+koukai waza flag_enabled(
+    result: CliResult,
+    specs: []CliSpec,
+    name: string
+) -> bool {
+    kaku i = find_spec(specs, name);
+
+    moshi (i < 0 || specs[i].takes_value) {
+        kaesu iie;
+    }
+
+    kaesu result.seen[i];
+}
+
+// Generate help text.
+koukai waza help_text(
+    program: string,
+    specs: []CliSpec
+) -> string {
+    kaku builder = string.new_builder();
+
+    string.write_string(builder, "Usage: ");
+    string.write_string(builder, program);
+    string.write_string(
+        builder,
+        " [options] [--] [arguments...]\n\nOptions:\n"
+    );
+
+    kaku i: int64 = 0;
+
+    aida (i < len(specs)) {
+        string.write_string(builder, "  ");
+
+        moshi (specs[i].short_name != "") {
+            string.write_string(
+                builder,
+                specs[i].short_name
+            );
+            string.write_string(builder, ", ");
+        }
+
+        string.write_string(
+            builder,
+            specs[i].long_name
+        );
+
+        moshi (specs[i].takes_value) {
+            string.write_string(builder, " <value>");
+        }
+
+        string.write_string(builder, "  ");
+        string.write_string(
+            builder,
+            specs[i].description
+        );
+
+        moshi (specs[i].required) {
+            string.write_string(builder, " (required)");
+        }
+
+        kaku fallback = specs[i].default_value;
+
+        moshi (fallback != mu) {
+            string.write_string(builder, " (default: ");
+            string.write_string(builder, fallback);
+            string.write_string(builder, ")");
+        }
+
+        string.write_string(builder, "\n");
+        i = i + 1;
+    }
+
+    string.write_string(
+        builder,
+        "  -h, --help  Show this help\n"
+    );
+
+    kaesu string.builder_string(builder);
+}

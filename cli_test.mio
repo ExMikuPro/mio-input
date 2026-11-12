@@ -1,0 +1,241 @@
+
+yobu "kiso/testing";
+yobu "kiso/string";
+
+waza sample_specs() -> []CliSpec {
+    kaesu [
+        value_option("--name", "-n", hai, mu, "User name"),
+        value_option("--age", "-a", iie, "16", "User age"),
+        flag_option("--verbose", "-v", "Verbose output")
+    ];
+}
+
+waza value_is(value: string?, expected: string) -> bool {
+    moshi (value == mu) { kaesu iie; }
+    kaesu value == expected;
+}
+
+waza test_long_and_short_values() -> unit {
+    kaku specs = sample_specs();
+
+    kaku long_result = parse_args(
+        ["demo", "--name=Miku", "--age", "20"],
+        specs
+    );
+
+    testing.expect(
+        long_result.error == mu,
+        "long options parse"
+    );
+
+    testing.expect(
+        value_is(get_value(long_result, specs, "--name"), "Miku"),
+        "equals syntax"
+    );
+
+    testing.expect(
+        value_is(get_value(long_result, specs, "--age"), "20"),
+        "separate value"
+    );
+
+    kaku short_result = parse_args(
+        ["demo", "-n", "Rin", "-a=17"],
+        specs
+    );
+
+    testing.expect(
+        short_result.error == mu,
+        "short options parse"
+    );
+
+    testing.expect(
+        value_is(get_value(short_result, specs, "-n"), "Rin"),
+        "short name"
+    );
+
+    testing.expect(
+        value_is(get_value(short_result, specs, "--age"), "17"),
+        "short equals syntax"
+    );
+}
+
+waza test_defaults_flags_and_repeated_options() -> unit {
+    kaku specs = sample_specs();
+
+    kaku result = parse_args(
+        ["demo", "-n", "Miku", "-v", "--name", "Luka"],
+        specs
+    );
+
+    testing.expect(result.error == mu, "valid options");
+
+    testing.expect(
+        value_is(get_value(result, specs, "--name"), "Luka"),
+        "last value wins"
+    );
+
+    testing.expect(
+        value_is(get_value(result, specs, "--age"), "16"),
+        "default used"
+    );
+
+    testing.expect(
+        flag_enabled(result, specs, "--verbose"),
+        "short flag enabled"
+    );
+
+    testing.expect(
+        !flag_enabled(result, specs, "--name"),
+        "value option is not a flag"
+    );
+}
+
+waza test_errors_and_required() -> unit {
+    kaku specs = sample_specs();
+
+    kaku missing = parse_args(
+        ["demo", "--age", "20"],
+        specs
+    );
+
+    testing.expect(
+        missing.error != mu,
+        "required option must be supplied"
+    );
+
+    kaku unknown = parse_args(
+        ["demo", "--name", "Miku", "--wat"],
+        specs
+    );
+
+    testing.expect(
+        unknown.error != mu,
+        "unknown option is an error"
+    );
+
+    kaku missing_value = parse_args(
+        ["demo", "--name", "--verbose"],
+        specs
+    );
+
+    testing.expect(
+        missing_value.error != mu,
+        "next option is not a value"
+    );
+
+    kaku bad_flag = parse_args(
+        ["demo", "--name", "Miku", "--verbose=yes"],
+        specs
+    );
+
+    testing.expect(
+        bad_flag.error != mu,
+        "flags reject attached values"
+    );
+}
+
+waza test_help_and_positionals() -> unit {
+    kaku specs = sample_specs();
+
+    kaku help = parse_args(
+        ["demo", "--help"],
+        specs
+    );
+
+    testing.expect(
+        help.help_requested && help.error == mu,
+        "help bypasses required options"
+    );
+
+    kaku result = parse_args(
+        [
+            "demo",
+            "--name", "Miku",
+            "file.txt",
+            "--",
+            "--verbose",
+            "-x"
+        ],
+        specs
+    );
+
+    testing.expect(
+        result.error == mu,
+        "positional arguments parse"
+    );
+
+    testing.expect(
+        len(result.positionals) == 3,
+        "all positional arguments retained"
+    );
+
+    moshi (len(result.positionals) == 3) {
+        testing.expect(
+            result.positionals[0] == "file.txt",
+            "first positional"
+        );
+
+        testing.expect(
+            result.positionals[1] == "--verbose",
+            "double dash stops parsing"
+        );
+
+        testing.expect(
+            result.positionals[2] == "-x",
+            "dash positional after separator"
+        );
+    }
+
+    testing.expect(
+        !flag_enabled(result, specs, "--verbose"),
+        "post-separator flag is not parsed"
+    );
+}
+
+waza test_help_text() -> unit {
+    kaku usage = help_text("demo", sample_specs());
+
+    testing.expect(
+        string.contains(usage, "Usage: demo"),
+        "usage heading"
+    );
+
+    testing.expect(
+        string.contains(usage, "--name"),
+        "name described"
+    );
+
+    testing.expect(
+        string.contains(usage, "default: 16"),
+        "default described"
+    );
+
+    testing.expect(
+        string.contains(usage, "--help"),
+        "help described"
+    );
+}
+
+waza test_negative_values_and_empty_inline() -> unit {
+    kaku specs = sample_specs();
+
+    kaku result = parse_args(
+        ["demo", "--name=", "--age", "-42"],
+        specs
+    );
+
+    testing.expect(
+        result.error == mu,
+        "negative values are allowed"
+    );
+
+    testing.expect(
+        value_is(get_value(result, specs, "--name"), ""),
+        "empty inline value preserved"
+    );
+
+    testing.expect(
+        value_is(get_value(result, specs, "--age"), "-42"),
+        "negative numeric value"
+    );
+}
